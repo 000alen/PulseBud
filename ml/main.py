@@ -10,8 +10,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 SIZE = 100
-EPOCHS = 100
-LEARNING_RATE = 2e-5
+EPOCHS = 1
+LEARNING_RATE = 2e-6
 MOMENTUM = 0.9
 TRAIN_SPLIT = 0.7
 TEST_SPLIT = 0.2
@@ -55,46 +55,47 @@ def ResampleLinear1D(x, target_size):
     return interpolation
 
 
-def fit(id, dataframe, model, optimizer, criterion, writer):
-    h = model.init_hidden()
+def fit(id, dataframe, model, optimizer, criterion, writer, progress):
     i = 0
     running_loss = 0.0
     for _, (*x, y) in dataframe.iterrows():
         x = ResampleLinear1D(x, SIZE)
-        x = torch.tensor(x, dtype=torch.float32)
         y = torch.tensor(y).unsqueeze(0)
-        y_hat, h = model(x, h)
-        loss = criterion(y_hat, y)
-        running_loss += loss.item()
 
-        if i % 100 == 0:
-            writer.add_scalar(f"{id}/loss", running_loss / 100, i)
-            running_loss = 0.0
+        h = model.init_hidden()
+        for x_i in x:
+            x_i = torch.tensor(x_i, dtype=torch.float32).unsqueeze(0)
+            y_hat, h = model(x_i, h)
+            loss = criterion(y_hat, y)
+            running_loss += loss.item()
 
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        i += 1
+            if i % 100 == 0:
+                writer.add_scalar(f"{id}/loss", running_loss / 100, i)
+                running_loss = 0.0
+
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            i += 1
+            progress.update(1)
 
 
 def evaluate(id, dataframe, model, writer):
     x = [x_i for _, (*x_i, _) in dataframe.iterrows()]
     x = [ResampleLinear1D(x_i, SIZE) for x_i in x]
-    x = [torch.tensor(x_i, dtype=torch.float32) for x_i in x]
     y = [y_i for _, (*_, y_i) in dataframe.iterrows()]
     y = [torch.tensor(y_i, dtype=torch.float32) for y_i in y]
 
     total, correct = 0, 0
     for x_i, y_i in zip(x, y):
-        y_hat, _ = model(x_i, model.init_hidden())
-        y_hat = torch.round(y_hat)
-        total += 1
-        correct += int(y_hat == y_i)
+        h = model.init_hidden()
+        for x_ij in x_i:
+            y_hat, h = model(x_ij, h)
+            y_hat = torch.round(y_hat)
+            total += 1
+            correct += int(y_hat == y_i)
     accuracy = correct / total
     writer.add_scalar(f"{id}/accuracy", accuracy, 0)
-
-    # alternative
-    # tf.math.confusion_matrix([real_labels], [predictions])
 
 
 dataframe = pandas.read_csv("ecg.csv")
@@ -105,13 +106,15 @@ validation_dataframe = test_dataframe.sample(
 )
 test_dataframe = test_dataframe.drop(validation_dataframe.index)
 
-model = Model(SIZE, SIZE, 1)
+model = Model(1, SIZE, 1)
 criterion = nn.BCELoss()
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
 writer = SummaryWriter()
 
-for epoch in tqdm(range(EPOCHS)):
-    fit("train", train_dataframe, model, optimizer, criterion, writer)
-    evaluate("test", test_dataframe, model, writer)
-    if epoch % 10 == 0:
-        torch.save(model.state_dict(), f"./checkpoints/model-{DATETIME}-{epoch}.pt")
+TOTAL = EPOCHS * sum(len(row) - 1 for _, row in train_dataframe.iterrows())
+with tqdm(total=TOTAL) as progress:
+    for epoch in range(EPOCHS):
+        fit("train", train_dataframe, model, optimizer, criterion, writer, progress)
+        evaluate("test", test_dataframe, model, writer)
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), f"./checkpoints/model-{DATETIME}-{epoch}.pt")
