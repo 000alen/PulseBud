@@ -7,6 +7,8 @@ import torch.optim as optim
 
 SIZE = 100
 EPOCHS = 25
+LEARNING_RATE = 0.001
+MOMENTUM = 0.9
 
 
 class Model(nn.Module):
@@ -48,7 +50,7 @@ def ResampleLinear1D(x, target_size):
 dataframe = pandas.read_csv("ecg.csv")
 model = Model(SIZE, SIZE, 1)
 criterion = nn.BCELoss()
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
 
 
 i = 0
