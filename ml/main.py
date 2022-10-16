@@ -4,11 +4,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.utils.tensorboard import SummaryWriter
+
 
 SIZE = 100
-EPOCHS = 25
-LEARNING_RATE = 0.001
+EPOCHS = 10
+LEARNING_RATE = 2e-5
 MOMENTUM = 0.9
+TRAIN_SPLIT = 0.7
+TEST_SPLIT = 0.2
+VALIDATION_SPLIT = 0.1
 
 
 class Model(nn.Module):
@@ -47,15 +52,9 @@ def ResampleLinear1D(x, target_size):
     return interpolation
 
 
-dataframe = pandas.read_csv("ecg.csv")
-model = Model(SIZE, SIZE, 1)
-criterion = nn.BCELoss()
-optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
-
-
-i = 0
-for epoch in range(EPOCHS):
+def fit(id, dataframe, model, optimizer, criterion, writer):
     h = model.init_hidden()
+    i = 0
     for _, (*x, y) in dataframe.iterrows():
         x = ResampleLinear1D(x, SIZE)
         x = torch.tensor(x, dtype=torch.float32)
@@ -63,10 +62,50 @@ for epoch in range(EPOCHS):
         y_hat, h = model(x, h)
         loss = criterion(y_hat, y)
 
-        if i % 1000 == 0:
-            print(loss)
+        if i % 10 == 0:
+            writer.add_scalar(f"{id}/loss", loss, i)
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         i += 1
+
+
+def evaluate(id, dataframe, model, writer):
+    x = [x_i for _, (*x_i, _) in dataframe.iterrows()]
+    x = [ResampleLinear1D(x_i, SIZE) for x_i in x]
+    x = [torch.tensor(x_i, dtype=torch.float32) for x_i in x]
+    y = [y_i for _, (*_, y_i) in dataframe.iterrows()]
+    y = [torch.tensor(y_i, dtype=torch.float32) for y_i in y]
+
+    total, correct = 0, 0
+    for x_i, y_i in zip(x, y):
+        y_hat, _ = model(x_i, model.init_hidden())
+        y_hat = torch.round(y_hat)
+        total += 1
+        correct += int(y_hat == y_i)
+    accuracy = correct / total
+    writer.add_scalar(f"{id}/accuracy", accuracy, 0)
+
+
+# alternative
+#tf.math.confusion_matrix([real_labels], [predictions])
+
+
+dataframe = pandas.read_csv("ecg.csv")
+train_dataframe = dataframe.sample(frac=TRAIN_SPLIT, random_state=0)
+test_dataframe = dataframe.drop(train_dataframe.index)
+validation_dataframe = test_dataframe.sample(
+    frac=VALIDATION_SPLIT / (VALIDATION_SPLIT + TEST_SPLIT), random_state=0
+)
+test_dataframe = test_dataframe.drop(validation_dataframe.index)
+
+model = Model(SIZE, SIZE, 1)
+criterion = nn.BCELoss()
+optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
+writer = SummaryWriter()
+
+TOTAL = EPOCHS * len(dataframe)
+for epoch in range(EPOCHS):
+    # fit("train", train_dataframe, model, optimizer, criterion, writer)
+    evaluate("test", test_dataframe, model, writer)
