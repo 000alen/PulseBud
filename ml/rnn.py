@@ -1,60 +1,55 @@
+import pandas
+import numpy
 import torch
 import torch.nn as nn
-import numpy as np
-
-import matplotlib.pyplot as plt
-from scipy.signal import resample
-from scipy.interpolate import interp1d
 
 
-class Block(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(Block, self).__init__()
+SIZE = 100
+EPOCHS = 1
+
+
+class Model(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size) -> None:
+        super().__init__()
+
+        self.input_size = input_size
         self.hidden_size = hidden_size
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.c2o = nn.Linear(input_size + hidden_size, output_size)
+        self.output_size = output_size
 
-    def forward(self, x, hidden_state):
-        combined = torch.cat((x, hidden_state), 1)
-        hidden = torch.sigmoid(self.i2h(combined))
-        output = self.c2o(combined)
-        return output, hidden
+        self.l1 = nn.Linear(input_size, hidden_size)
+        self.l2 = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x, h):
+        y_hat = self.l1(x,)
+        h = torch.sigmoid(y_hat)
+        y_hat = self.l2(h)
+        y_hat = torch.sigmoid(y_hat)
+        return y_hat, h
 
     def init_hidden(self):
-        return nn.init.kaiming_uniform_(torch.empty(1, self.hidden_size))
+        return torch.zeros(1, self.hidden_size, dtype=torch.float32)
 
 
-def ResampleLinear1D(original, targetLen):
-    original = np.array(original, dtype=np.float)
-    index_arr = np.linspace(0, len(original) - 1, num=targetLen, dtype=np.float)
-    index_floor = np.array(index_arr, dtype=np.int)  # Round down
+def ResampleLinear1D(x, target_size):
+    x = numpy.array(x)
+    index_array = numpy.linspace(0, len(x) - 1, num=target_size)
+    index_floor = numpy.array(index_array, dtype=numpy.int64)
     index_ceil = index_floor + 1
-    index_rem = index_arr - index_floor  # Remain
-
-    val1 = original[index_floor]
-    val2 = original[index_ceil % len(original)]
-    interp = val1 * (1.0 - index_rem) + val2 * index_rem
-    assert len(interp) == targetLen
-    return interp
+    index_remaining = index_array - index_floor
+    lower = x[index_floor]
+    upper = x[index_ceil % len(x)]
+    interpolation = lower * (1.0 - index_remaining) + upper * index_remaining
+    return interpolation
 
 
-if __name__ == "__main__":
-    original = np.sin(np.arange(256) / 10.0)
-    targetLen = 100
+model = Model(SIZE, SIZE, 1)
+dataframe = pandas.read_csv("ecg.csv")
 
-    # Method 1: Use scipy interp1d (linear interpolation)
-    # This is the simplest conceptually as it just uses linear interpolation. Scipy
-    # also offers a range of other interpolation methods.
-    f = interp1d(np.arange(256), original, "linear")
-    plt.plot(np.apply_along_axis(f, 0, np.linspace(0, 255, num=targetLen)))
-
-    # Method 2: Use numpy to do linear interpolation
-    # If you don't have scipy, you can do it in numpy with the above function
-    plt.plot(ResampleLinear1D(original, targetLen))
-
-    # Method 3: Use scipy's resample
-    # Converts the signal to frequency space (Fourier method), then back. This
-    # works efficiently on periodic functions but poorly on non-periodic functions.
-    plt.plot(resample(original, targetLen))
-
-    plt.show()
+for epoch in range(EPOCHS):
+    h = model.init_hidden()
+    for i, (*x, y) in list(dataframe.iterrows())[:10]:
+        x = ResampleLinear1D(x, SIZE)
+        x = torch.tensor(x, dtype=torch.float32)
+        y = torch.tensor(y)
+        y_hat, h = model(x, h)
+        print(y_hat, y)

@@ -23,8 +23,8 @@ class Block(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(Block, self).__init__()
         self.hidden_size = hidden_size
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.c2o = nn.Linear(input_size + hidden_size, output_size)
+        self.i2h = nn.Linear(input_size + hidden_size, hidden_size).float()
+        self.c2o = nn.Linear(input_size + hidden_size, output_size).float()
 
     def forward(self, x, hidden_state):
         combined = torch.cat((x, hidden_state), 1)
@@ -38,9 +38,9 @@ class Block(nn.Module):
 
 # %%
 def ResampleLinear1D(original, targetLen):
-    original = numpy.array(original, dtype=torch.double)
-    index_arr = numpy.linspace(0, len(original) - 1, num=targetLen, dtype=torch.double)
-    index_floor = numpy.array(index_arr, dtype=torch.int64)  # Round down
+    original = numpy.array(original, dtype=numpy.float32)
+    index_arr = numpy.linspace(0, len(original) - 1, num=targetLen, dtype=numpy.float32)
+    index_floor = numpy.array(index_arr, dtype=numpy.int64)  # Round down
     index_ceil = index_floor + 1
     index_rem = index_arr - index_floor  # Remain
     val1 = original[index_floor]
