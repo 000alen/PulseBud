@@ -80,7 +80,7 @@ def fit(id, dataframe, model, optimizer, criterion, writer, progress):
             progress.update(1)
 
 
-def evaluate(id, dataframe, model, writer):
+def evaluate(id, dataframe, model, writer, epoch):
     x = [x_i for _, (*x_i, _) in dataframe.iterrows()]
     x = [ResampleLinear1D(x_i, SIZE) for x_i in x]
     y = [y_i for _, (*_, y_i) in dataframe.iterrows()]
@@ -115,6 +115,6 @@ TOTAL = EPOCHS * sum(len(row) - 1 for _, row in train_dataframe.iterrows())
 with tqdm(total=TOTAL) as progress:
     for epoch in range(EPOCHS):
         fit("train", train_dataframe, model, optimizer, criterion, writer, progress)
-        evaluate("test", test_dataframe, model, writer)
+        evaluate("test", test_dataframe, model, writer, epoch)
         if epoch % 10 == 0:
             torch.save(model.state_dict(), f"./checkpoints/model-{DATETIME}-{epoch}.pt")
