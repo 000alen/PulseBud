@@ -4,16 +4,19 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from tqdm import tqdm
+from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 
 
 SIZE = 100
-EPOCHS = 10
+EPOCHS = 100
 LEARNING_RATE = 2e-5
 MOMENTUM = 0.9
 TRAIN_SPLIT = 0.7
 TEST_SPLIT = 0.2
 VALIDATION_SPLIT = 0.1
+DATETIME = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 class Model(nn.Module):
@@ -55,15 +58,18 @@ def ResampleLinear1D(x, target_size):
 def fit(id, dataframe, model, optimizer, criterion, writer):
     h = model.init_hidden()
     i = 0
+    running_loss = 0.0
     for _, (*x, y) in dataframe.iterrows():
         x = ResampleLinear1D(x, SIZE)
         x = torch.tensor(x, dtype=torch.float32)
         y = torch.tensor(y).unsqueeze(0)
         y_hat, h = model(x, h)
         loss = criterion(y_hat, y)
+        running_loss += loss.item()
 
-        if i % 10 == 0:
-            writer.add_scalar(f"{id}/loss", loss, i)
+        if i % 100 == 0:
+            writer.add_scalar(f"{id}/loss", running_loss / 100, i)
+            running_loss = 0.0
 
         loss.backward()
         optimizer.step()
@@ -87,9 +93,8 @@ def evaluate(id, dataframe, model, writer):
     accuracy = correct / total
     writer.add_scalar(f"{id}/accuracy", accuracy, 0)
 
-
-# alternative
-#tf.math.confusion_matrix([real_labels], [predictions])
+    # alternative
+    # tf.math.confusion_matrix([real_labels], [predictions])
 
 
 dataframe = pandas.read_csv("ecg.csv")
@@ -105,7 +110,8 @@ criterion = nn.BCELoss()
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
 writer = SummaryWriter()
 
-TOTAL = EPOCHS * len(dataframe)
-for epoch in range(EPOCHS):
-    # fit("train", train_dataframe, model, optimizer, criterion, writer)
+for epoch in tqdm(range(EPOCHS)):
+    fit("train", train_dataframe, model, optimizer, criterion, writer)
     evaluate("test", test_dataframe, model, writer)
+    if epoch % 10 == 0:
+        torch.save(model.state_dict(), f"./checkpoints/model-{DATETIME}-{epoch}.pt")
