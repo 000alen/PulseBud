@@ -1,19 +1,18 @@
+<p align="center">
+  <img src="./assets/img/logo.png" />
+</p>
+
 # CalHacks
 
-Hackathon repo for Calhacks 9.0 with the fellow contributors, Alen Rubilar Munoz, Enes Akyuz, Ian Wafula, Dilnaz Uasheva.
+A real-time seizure prediction system for smartwatches, powered by machine learning. Provides an emergency notification system and instant access to critical medical records for healthcare workers.
 
-## Project Ideas
+## Getting started
 
-Analysing the ECG data from smartwatches to predict seizures, or possible anomalies with low latency via RNNs, creating an emergency notification system to prevent possible accidents.
+PulseBud is currently in a prototype state and is being actively developed.
 
-## App
+## Authors
 
-[README](./app/README.md)
-
-## ML
-
-[README](./ml/README.md)
-
-## Watch
-
-[README](./watch/README.md)
+* Alen Rubilar ([000alen](https://github.com/000alen))
+* Enes Akyuz ([EnesAkyuz](https://github.com/EnesAkyuz))
+* Ian Wafula ([IamWafula](https://github.com/IamWafula))
+* Dilnaz Uasheva
